@@ -1,0 +1,19 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build artifacts
+build/
+dist/
+*.spec
+
+# Virtual environment
+.venv/
+
+# Log files
+*.log
+
+# VS Code settings
+.vscode/
