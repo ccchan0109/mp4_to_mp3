@@ -1,16 +1,66 @@
 import os
+import json
+import sys
 import threading
 import customtkinter as ctk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
+from CTkMessagebox import CTkMessagebox
 from moviepy.editor import VideoFileClip
+
+
+# --- Constants & Config Path ---
+def get_config_path():
+    """
+    Determines the appropriate cross-platform path for the config file.
+    Ensures the directory exists.
+    """
+    app_name = "Mp4ToMp3Converter"
+
+    # For Windows
+    if sys.platform == "win32":
+        app_data_dir = os.path.join(os.environ["APPDATA"], app_name)
+    # For macOS
+    elif sys.platform == "darwin":
+        app_data_dir = os.path.join(
+            os.path.expanduser("~"), "Library", "Application Support", app_name
+        )
+    # For Linux and other Unix-like systems
+    else:
+        app_data_dir = os.path.join(os.path.expanduser("~"), ".config", app_name)
+
+    # Create the directory if it doesn't exist
+    os.makedirs(app_data_dir, exist_ok=True)
+
+    return os.path.join(app_data_dir, "config.json")
+
 
 # --- High DPI Scaling ---
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
+
+# --- Configuration Handling ---
+def load_config(file_path):
+    """Loads configuration from a JSON file."""
+    if not os.path.exists(file_path):
+        return {}
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return {}
+
+
+def save_config(config, file_path):
+    """Saves configuration to a JSON file."""
+    try:
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=4)
+    except IOError as e:
+        print(f"Error saving config: {e}")
+
+
 # --- Core Conversion Logic ---
-
-
 def convert_mp4_to_mp3(mp4_path, mp3_path, progress_callback):
     """
     Converts a single MP4 file to MP3 using moviepy.
@@ -45,8 +95,6 @@ def convert_mp4_to_mp3(mp4_path, mp3_path, progress_callback):
 
 
 # --- UI Application Class ---
-
-
 class ConverterApp(ctk.CTk):
     def __init__(self):
         """
@@ -55,7 +103,14 @@ class ConverterApp(ctk.CTk):
         super().__init__()
 
         self.title("MP4 轉 MP3 批次轉換工具")
-        self.geometry("700x550")
+
+        # --- Encapsulated Configuration ---
+        self.config_path = get_config_path()
+        self.config = load_config(self.config_path)
+
+        # Set geometry from config or default
+        initial_geometry = self.config.get("window_geometry", "700x550")
+        self.geometry(initial_geometry)
 
         # --- UI Layout ---
         self.grid_columnconfigure(0, weight=1)
@@ -112,19 +167,53 @@ class ConverterApp(ctk.CTk):
         self.progress_text = ctk.CTkTextbox(self, wrap="word", state="disabled")
         self.progress_text.grid(row=3, column=0, padx=15, pady=(0, 15), sticky="nsew")
 
+        self.load_initial_paths()
+
+        # Protocol for saving settings on close
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def on_closing(self):
+        """Handle window closing event to save geometry."""
+        self.config["window_geometry"] = self.geometry()
+        save_config(self.config, self.config_path)
+        self.destroy()
+
+    def load_initial_paths(self):
+        """Load and set initial paths from config."""
+        last_input = self.config.get("last_input_folder")
+        last_output = self.config.get("last_output_folder")
+        if last_input and os.path.isdir(last_input):
+            self.input_entry.insert(0, last_input)
+            self.log_message(f"已載入上次的來源資料夾: {last_input}")
+        if last_output and os.path.isdir(last_output):
+            self.output_entry.insert(0, last_output)
+            self.log_message(f"已載入上次的儲存資料夾: {last_output}")
+
     def select_input_folder(self):
-        folder_path = filedialog.askdirectory(title="選擇包含 MP4 檔案的資料夾")
+        """Selects input folder and saves it to config."""
+        initial_dir = self.input_entry.get() or self.config.get("last_input_folder")
+        folder_path = filedialog.askdirectory(
+            title="選擇包含 MP4 檔案的資料夾", initialdir=initial_dir, parent=self
+        )
         if folder_path:
             self.input_entry.delete(0, "end")
             self.input_entry.insert(0, folder_path)
             self.log_message(f"已選擇來源資料夾: {folder_path}")
+            self.config["last_input_folder"] = folder_path
+            save_config(self.config, self.config_path)
 
     def select_output_folder(self):
-        folder_path = filedialog.askdirectory(title="選擇儲存 MP3 檔案的資料夾")
+        """Selects output folder and saves it to config."""
+        initial_dir = self.output_entry.get() or self.config.get("last_output_folder")
+        folder_path = filedialog.askdirectory(
+            title="選擇儲存 MP3 檔案的資料夾", initialdir=initial_dir, parent=self
+        )
         if folder_path:
             self.output_entry.delete(0, "end")
             self.output_entry.insert(0, folder_path)
             self.log_message(f"已選擇儲存資料夾: {folder_path}")
+            self.config["last_output_folder"] = folder_path
+            save_config(self.config, self.config_path)
 
     def log_message(self, message):
         """Appends a message to the progress text area."""
@@ -135,28 +224,61 @@ class ConverterApp(ctk.CTk):
         self.update_idletasks()
 
     def start_conversion_thread(self):
-        """Starts the conversion process in a separate thread to prevent UI freezing."""
+        """
+        Validates paths, confirms with user, and starts the conversion
+        process in a separate thread to prevent UI freezing.
+        """
         input_dir = self.input_entry.get()
         output_dir = self.output_entry.get()
 
         if not input_dir or not output_dir:
-            messagebox.showerror("錯誤", "請先選擇來源資料夾和儲存資料夾。")
+            CTkMessagebox(
+                title="錯誤", message="請先選擇來源資料夾和儲存資料夾。", icon="cancel"
+            )
             return
 
         # Find all MP4 files
         try:
             mp4_files = [f for f in os.listdir(input_dir) if f.lower().endswith(".mp4")]
         except FileNotFoundError:
-            messagebox.showerror("錯誤", f"找不到指定的來源資料夾:\n{input_dir}")
+            CTkMessagebox(
+                title="錯誤", message=f"找不到指定的來源資料夾:\n{input_dir}", icon="cancel"
+            )
             return
 
         if not mp4_files:
-            messagebox.showinfo("提示", "在來源資料夾中沒有找到任何 .mp4 檔案。")
+            CTkMessagebox(
+                title="提示", message="在來源資料夾中沒有找到任何 .mp4 檔案。", icon="info"
+            )
             return
+
+        # --- PRE-CONVERSION CONFIRMATION ---
+        file_list_str = "\n".join(f"- {f}" for f in mp4_files)
+        if len(file_list_str) > 800:  # Limit length to avoid huge dialogs
+            file_list_str = file_list_str[:800] + "\n..."
+
+        confirmation_message = (
+            f"即將轉換以下 {len(mp4_files)} 個檔案：\n\n{file_list_str}\n\n是否繼續？"
+        )
+
+        msg = CTkMessagebox(
+            title="確認轉換清單",
+            message=confirmation_message,
+            icon="question",
+            option_1="取消",
+            option_2="繼續",
+        )
+
+        if msg.get() != "繼續":
+            self.log_message("使用者取消了操作。")
+            return
+        # --- END CONFIRMATION ---
 
         self.convert_button.configure(state="disabled", text="轉換中...")
         self.log_message("-" * 50)
-        self.log_message(f"找到 {len(mp4_files)} 個 MP4 檔案，準備開始轉換。")
+        self.log_message(
+            f"使用者已確認，找到 {len(mp4_files)} 個 MP4 檔案，準備開始轉換。"
+        )
 
         # Run conversion in a new thread
         conversion_thread = threading.Thread(
@@ -190,14 +312,15 @@ class ConverterApp(ctk.CTk):
         self.log_message("=" * 50)
         self.log_message(f"全部轉換完成！ 成功: {success_count}, 失敗: {fail_count}")
         self.convert_button.configure(state="normal", text="開始轉換")
-        messagebox.showinfo(
-            "完成",
-            f"所有轉換任務已處理完畢。\n\n成功: {success_count}\n失敗: {fail_count}",
+        CTkMessagebox(
+            title="完成",
+            message=f"所有轉換任務已處理完畢。\n\n成功: {success_count}\n失敗: {fail_count}",
+            icon="check",
+            option_1="太棒了",
         )
 
 
 # --- Main Execution ---
-
 if __name__ == "__main__":
     app = ConverterApp()
     app.mainloop()
