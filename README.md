@@ -24,8 +24,8 @@ A simple desktop application to convert video files (e.g., MP4) into audio files
 
 ### For End-Users
 
-1.  Download the `main.exe` file from the `dist` folder.
-2.  Double-click `main.exe` to run the application.
+1.  Download the `Mp4ToMp3Converter-vX.X.X.exe` file from the `dist` folder (where `X.X.X` is the version number).
+2.  Double-click `Mp4ToMp3Converter-vX.X.X.exe` to run the application.
 3.  Click the "Select MP4 File" button and choose your video file, or simply drag and drop your file onto the window.
 4.  The conversion will start automatically, and the resulting MP3 file will be saved in the same directory as the original video file.
 
@@ -74,6 +74,10 @@ Run the following command in your terminal:
 ```
 
 The generated executable will be located in the `dist/` directory.
+
+## Versioning
+
+This project uses a `VERSION` file to manage the release version. To create a new release, update the version number in this file before running the build script. The build script will automatically append the version number to the executable name.
 
 ## License
 
