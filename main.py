@@ -312,12 +312,6 @@ class ConverterApp(ctk.CTk):
         self.log_message("=" * 50)
         self.log_message(f"全部轉換完成！ 成功: {success_count}, 失敗: {fail_count}")
         self.convert_button.configure(state="normal", text="開始轉換")
-        CTkMessagebox(
-            title="完成",
-            message=f"所有轉換任務已處理完畢。\n\n成功: {success_count}\n失敗: {fail_count}",
-            icon="check",
-            option_1="太棒了",
-        )
 
 
 # --- Main Execution ---
