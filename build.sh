@@ -10,7 +10,7 @@ rm -f main.spec
 echo "Running PyInstaller..."
 # Note: The path might need to be adjusted depending on the shell environment.
 # This path is tailored for Git Bash on Windows.
-./.venv/Scripts/pyinstaller --onefile --windowed --copy-metadata imageio --copy-metadata moviepy main.py
+./.venv/Scripts/pyinstaller --onefile --windowed --name Mp4ToMp3Converter --copy-metadata imageio --copy-metadata moviepy main.py
 
 echo "Build complete!"
 echo "The executable can be found in the 'dist' folder."
